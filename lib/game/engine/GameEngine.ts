@@ -44,6 +44,7 @@ export class GameEngine {
   private usernameError: string = '';
   private onUsernameSubmit?: (username: string) => void;
   private handleKeydownBound: ((e: KeyboardEvent) => void) | null = null;
+  private pendingAutoStart: boolean = false;
 
   constructor(canvas: HTMLCanvasElement, callbacks?: GameCallbacks) {
     this.canvas = canvas;
@@ -95,18 +96,11 @@ export class GameEngine {
     // Initial render
     this.render();
 
-    // Auto-start if requested and not blocked by username modal or no lives
-    if (options?.autoStart) {
-      requestAnimationFrame(() => {
-        if (this.gameState.is('idle') && (this.livesState === null || this.livesState.count > 0)) {
-          this.start();
-        } else {
-          this.startIdleLoop();
-        }
-      });
-    } else {
-      this.startIdleLoop();
-    }
+    // Store autoStart preference - will be used after username modal completes
+    this.pendingAutoStart = options?.autoStart ?? false;
+
+    // Always start idle loop - autoStart will be triggered after username modal if needed
+    this.startIdleLoop();
   }
 
   private startIdleLoop(): void {
@@ -496,6 +490,14 @@ export class GameEngine {
     this.render();
   }
 
+  // Trigger pending autoStart (called when user already exists)
+  triggerPendingAutoStart(): void {
+    if (this.pendingAutoStart && this.gameState.is('idle')) {
+      this.pendingAutoStart = false;
+      this.start();
+    }
+  }
+
   private validateUsername(username: string): { valid: boolean; error: string } {
     if (username.length < 3) {
       return { valid: false, error: 'Too short (min 3 chars)' };
@@ -519,6 +521,11 @@ export class GameEngine {
         this.onUsernameSubmit?.(this.usernameInput);
         this.gameState.transition('idle');
         this.render();
+        // Auto-start game if it was pending
+        if (this.pendingAutoStart) {
+          this.pendingAutoStart = false;
+          requestAnimationFrame(() => this.start());
+        }
       } else {
         this.usernameError = validation.error;
         this.render();
@@ -665,6 +672,11 @@ export class GameEngine {
           this.onUsernameSubmit?.(this.usernameInput);
           this.gameState.transition('idle');
           this.render();
+          // Auto-start game if it was pending
+          if (this.pendingAutoStart) {
+            this.pendingAutoStart = false;
+            requestAnimationFrame(() => this.start());
+          }
         } else {
           this.usernameError = validation.error;
           this.render();

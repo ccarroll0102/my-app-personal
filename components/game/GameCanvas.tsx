@@ -149,13 +149,18 @@ export function GameCanvas({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
-  // Show username modal if no user (after engine is initialized)
+  // Show username modal if no user, or trigger autoStart if user exists
   useEffect(() => {
-    if (!user && engineRef.current && !hasShownUsernameModal.current) {
+    if (!engineRef.current) return;
+
+    if (!user && !hasShownUsernameModal.current) {
       hasShownUsernameModal.current = true;
       engineRef.current.showUsernameModal((username) => {
         onUsernameSubmitRef.current?.(username);
       });
+    } else if (user) {
+      // User exists, trigger pending autoStart if any
+      engineRef.current.triggerPendingAutoStart();
     }
   }, [user]);
 
