@@ -1,8 +1,20 @@
--- Leaderboard Migration V2: Remove auth.users foreign key
--- This migration updates the leaderboard table to allow non-auth users
+-- Leaderboard Migration V2: Complete leaderboard setup without auth
 -- Run this in Supabase SQL Editor
 
--- 1. Drop the foreign key constraint on user_id
+-- 1. Create leaderboard table if it doesn't exist
+CREATE TABLE IF NOT EXISTS leaderboard (
+  user_id UUID PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  high_score INTEGER NOT NULL DEFAULT 0,
+  games_played INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Enable RLS
+ALTER TABLE leaderboard ENABLE ROW LEVEL SECURITY;
+
+-- 3. Drop the foreign key constraint on user_id (if exists from previous setup)
 ALTER TABLE leaderboard
   DROP CONSTRAINT IF EXISTS leaderboard_user_id_fkey;
 
@@ -26,9 +38,11 @@ CREATE POLICY "Anyone can update own entry"
   ON leaderboard FOR UPDATE
   USING (true);
 
--- Note: The "Anyone can view leaderboard" policy should already exist
--- If not, create it:
--- CREATE POLICY "Anyone can view leaderboard" ON leaderboard FOR SELECT USING (true);
+-- Create SELECT policy for viewing leaderboard
+DROP POLICY IF EXISTS "Anyone can view leaderboard" ON leaderboard;
+CREATE POLICY "Anyone can view leaderboard"
+  ON leaderboard FOR SELECT
+  USING (true);
 
 -- 5. Update the update_high_score function to work without auth
 CREATE OR REPLACE FUNCTION update_high_score(
@@ -82,5 +96,31 @@ BEGIN
   SELECT l.high_score, l.games_played, v_is_new_high
   FROM leaderboard l
   WHERE l.user_id = p_user_id;
+END;
+$$;
+
+-- 6. Create or replace the get_leaderboard function to fetch ranked scores
+CREATE OR REPLACE FUNCTION get_leaderboard(p_limit INTEGER DEFAULT 50)
+RETURNS TABLE(
+  rank BIGINT,
+  user_id UUID,
+  display_name TEXT,
+  high_score INTEGER,
+  games_played INTEGER
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    ROW_NUMBER() OVER (ORDER BY l.high_score DESC) as rank,
+    l.user_id,
+    l.display_name,
+    l.high_score,
+    l.games_played
+  FROM leaderboard l
+  ORDER BY l.high_score DESC
+  LIMIT p_limit;
 END;
 $$;
