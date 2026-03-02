@@ -28,9 +28,9 @@ export const GameConfig = {
   AIR_OBSTACLE_HEIGHT: 24,
   AIR_OBSTACLE_Y: 100,
 
-  // Scrolling - start SLOW and gradually increase
-  BASE_SCROLL_SPEED: 2.5,  // Much slower start
-  MAX_SCROLL_SPEED: 10,
+  // Scrolling - slow start, speeds up with progression
+  BASE_SCROLL_SPEED: 3,    // Slow comfortable start
+  MAX_SCROLL_SPEED: 11,    // Challenging max speed
 
   // Difficulty - more gradual progression (15 levels)
   MAX_LEVEL: 15,

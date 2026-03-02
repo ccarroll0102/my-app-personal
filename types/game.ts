@@ -12,7 +12,7 @@ export interface Rectangle {
   height: number;
 }
 
-export type GameStateType = 'idle' | 'playing' | 'paused' | 'gameover' | 'death_modal' | 'countdown';
+export type GameStateType = 'idle' | 'playing' | 'paused' | 'gameover' | 'death_modal' | 'countdown' | 'username_modal';
 
 export type PlayerState = 'running' | 'jumping' | 'ducking' | 'dead';
 

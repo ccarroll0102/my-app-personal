@@ -425,4 +425,98 @@ export class Renderer {
 
     this.ctx.restore();
   }
+
+  renderUsernameModal(currentInput: string, errorMessage?: string): void {
+    this.ctx.save();
+
+    // Dark overlay
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    this.ctx.fillRect(0, 0, this.width, this.height);
+
+    const centerX = this.width / 2;
+
+    // Title
+    this.ctx.fillStyle = '#ffd700';
+    this.ctx.font = '16px "Press Start 2P", monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('WIZARD RUN', centerX, 35);
+
+    // Subtitle
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = '8px "Press Start 2P", monospace';
+    this.ctx.fillText('Enter your name, wizard!', centerX, 58);
+
+    // Input box
+    const inputX = centerX - 100;
+    const inputY = 75;
+    const inputWidth = 200;
+    const inputHeight = 30;
+
+    // Input background
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    this.ctx.fillRect(inputX, inputY, inputWidth, inputHeight);
+
+    // Input border
+    const isValid = !errorMessage;
+    this.ctx.strokeStyle = isValid ? '#ffd700' : '#ff4444';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(inputX, inputY, inputWidth, inputHeight);
+
+    // Input text with blinking cursor
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = '12px "Press Start 2P", monospace';
+    this.ctx.textAlign = 'center';
+
+    const displayText = currentInput || '';
+    const showCursor = Date.now() % 1000 < 500;
+    const textWithCursor = displayText + (showCursor ? '_' : '');
+    this.ctx.fillText(textWithCursor, centerX, inputY + 20);
+
+    // Error message
+    if (errorMessage) {
+      this.ctx.fillStyle = '#ff4444';
+      this.ctx.font = '6px "Press Start 2P", monospace';
+      this.ctx.fillText(errorMessage, centerX, inputY + 45);
+    }
+
+    // Confirm button
+    const buttonY = 140;
+    const buttonWidth = 120;
+    const buttonHeight = 24;
+    const canSubmit = currentInput.length >= 3 && currentInput.length <= 15;
+
+    // Button background
+    if (canSubmit) {
+      this.ctx.fillStyle = 'rgba(255, 215, 0, 0.2)';
+      this.ctx.fillRect(centerX - buttonWidth / 2, buttonY - buttonHeight / 2, buttonWidth, buttonHeight);
+      this.ctx.strokeStyle = '#ffd700';
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(centerX - buttonWidth / 2, buttonY - buttonHeight / 2, buttonWidth, buttonHeight);
+    }
+
+    // Button text
+    this.ctx.fillStyle = canSubmit ? '#ffd700' : '#555555';
+    this.ctx.font = '10px "Press Start 2P", monospace';
+    this.ctx.fillText('START', centerX, buttonY + 4);
+
+    // Instructions
+    this.ctx.fillStyle = '#666666';
+    this.ctx.font = '6px "Press Start 2P", monospace';
+    this.ctx.fillText('3-15 characters | ENTER to confirm', centerX, 175);
+
+    this.ctx.restore();
+  }
+
+  getStartButtonBounds(): { x: number; y: number; width: number; height: number } {
+    const centerX = this.width / 2;
+    const buttonY = 140;
+    const buttonWidth = 120;
+    const buttonHeight = 24;
+    return {
+      x: centerX - buttonWidth / 2,
+      y: buttonY - buttonHeight / 2,
+      width: buttonWidth,
+      height: buttonHeight,
+    };
+  }
 }

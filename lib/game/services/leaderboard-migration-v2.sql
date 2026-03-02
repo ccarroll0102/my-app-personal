@@ -1,0 +1,86 @@
+-- Leaderboard Migration V2: Remove auth.users foreign key
+-- This migration updates the leaderboard table to allow non-auth users
+-- Run this in Supabase SQL Editor
+
+-- 1. Drop the foreign key constraint on user_id
+ALTER TABLE leaderboard
+  DROP CONSTRAINT IF EXISTS leaderboard_user_id_fkey;
+
+-- 2. Drop the user_lives table (no longer needed with localStorage)
+DROP TABLE IF EXISTS user_lives;
+
+-- 3. Drop the get_user_lives function
+DROP FUNCTION IF EXISTS get_user_lives(UUID);
+
+-- 4. Update RLS policies to allow any user_id (not just auth.uid())
+-- Drop existing restrictive policies
+DROP POLICY IF EXISTS "Users can insert own entry" ON leaderboard;
+DROP POLICY IF EXISTS "Users can update own entry" ON leaderboard;
+
+-- Create new open policies (the client manages user_id via localStorage)
+CREATE POLICY "Anyone can insert entry"
+  ON leaderboard FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Anyone can update own entry"
+  ON leaderboard FOR UPDATE
+  USING (true);
+
+-- Note: The "Anyone can view leaderboard" policy should already exist
+-- If not, create it:
+-- CREATE POLICY "Anyone can view leaderboard" ON leaderboard FOR SELECT USING (true);
+
+-- 5. Update the update_high_score function to work without auth
+CREATE OR REPLACE FUNCTION update_high_score(
+  p_user_id UUID,
+  p_display_name TEXT,
+  p_score INTEGER
+)
+RETURNS TABLE(
+  high_score INTEGER,
+  games_played INTEGER,
+  is_new_high_score BOOLEAN
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_current_high INTEGER;
+  v_is_new_high BOOLEAN := FALSE;
+BEGIN
+  -- Check if user already has an entry
+  SELECT l.high_score INTO v_current_high
+  FROM leaderboard l
+  WHERE l.user_id = p_user_id;
+
+  IF NOT FOUND THEN
+    -- First game for this user - insert new entry
+    INSERT INTO leaderboard (user_id, display_name, high_score, games_played)
+    VALUES (p_user_id, p_display_name, p_score, 1);
+    v_is_new_high := TRUE;
+  ELSE
+    -- Existing user - check if new high score
+    IF p_score > v_current_high THEN
+      UPDATE leaderboard
+      SET high_score = p_score,
+          display_name = p_display_name,
+          games_played = games_played + 1,
+          updated_at = NOW()
+      WHERE user_id = p_user_id;
+      v_is_new_high := TRUE;
+    ELSE
+      -- Just increment games played
+      UPDATE leaderboard
+      SET games_played = games_played + 1,
+          updated_at = NOW()
+      WHERE user_id = p_user_id;
+    END IF;
+  END IF;
+
+  -- Return the current stats
+  RETURN QUERY
+  SELECT l.high_score, l.games_played, v_is_new_high
+  FROM leaderboard l
+  WHERE l.user_id = p_user_id;
+END;
+$$;
