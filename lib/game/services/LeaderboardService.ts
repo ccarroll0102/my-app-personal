@@ -58,8 +58,28 @@ export class LeaderboardService {
   }
 
   async getUserRank(userId: string): Promise<number | null> {
-    const leaderboard = await this.getLeaderboard(1000);
-    const entry = leaderboard.find((e) => e.user_id === userId);
-    return entry?.rank ?? null;
+    // First get the user's high score
+    const { data: userData, error: userError } = await this.supabase
+      .from('leaderboard')
+      .select('high_score')
+      .eq('user_id', userId)
+      .single();
+
+    if (userError || !userData) {
+      return null;
+    }
+
+    // Count how many users have higher scores
+    const { count, error: countError } = await this.supabase
+      .from('leaderboard')
+      .select('*', { count: 'exact', head: true })
+      .gt('high_score', userData.high_score);
+
+    if (countError) {
+      return null;
+    }
+
+    // Rank = users with higher scores + 1
+    return (count ?? 0) + 1;
   }
 }

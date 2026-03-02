@@ -39,6 +39,12 @@ export class GameEngine {
   private countdownStartTime: number = 0;
   private hoveredOption: DeathModalChoice | null = null;
 
+  // Username modal
+  private usernameInput: string = '';
+  private usernameError: string = '';
+  private onUsernameSubmit?: (username: string) => void;
+  private handleKeydownBound: ((e: KeyboardEvent) => void) | null = null;
+
   constructor(canvas: HTMLCanvasElement, callbacks?: GameCallbacks) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
@@ -68,7 +74,7 @@ export class GameEngine {
     this.handleCanvasMouseMove = this.handleCanvasMouseMove.bind(this);
   }
 
-  init(): void {
+  init(options?: { autoStart?: boolean }): void {
     // Set up canvas
     this.canvas.width = GameConfig.GAME_WIDTH;
     this.canvas.height = GameConfig.GAME_HEIGHT;
@@ -78,15 +84,29 @@ export class GameEngine {
     this.inputManager.init();
     this.inputManager.initTouch(this.canvas);
 
-    // Add click and hover handlers for death modal
+    // Add click and hover handlers for death modal and username modal
     this.canvas.addEventListener('click', this.handleCanvasClick);
     this.canvas.addEventListener('mousemove', this.handleCanvasMouseMove);
+
+    // Add keydown handler for username modal
+    this.handleKeydownBound = this.handleUsernameKeydown.bind(this);
+    window.addEventListener('keydown', this.handleKeydownBound);
 
     // Initial render
     this.render();
 
-    // Start idle loop to listen for input
-    this.startIdleLoop();
+    // Auto-start if requested and not blocked by username modal or no lives
+    if (options?.autoStart) {
+      requestAnimationFrame(() => {
+        if (this.gameState.is('idle') && (this.livesState === null || this.livesState.count > 0)) {
+          this.start();
+        } else {
+          this.startIdleLoop();
+        }
+      });
+    } else {
+      this.startIdleLoop();
+    }
   }
 
   private startIdleLoop(): void {
@@ -102,6 +122,14 @@ export class GameEngine {
   }
 
   private idleLoop(): void {
+    // Handle username modal - just keep rendering
+    if (this.gameState.is('username_modal')) {
+      this.render();
+      this.inputManager.clearJustPressed();
+      this.idleLoopId = requestAnimationFrame(this.idleLoop);
+      return;
+    }
+
     // Block starting if no lives remaining
     if (this.gameState.is('idle') && this.livesState !== null && this.livesState.count === 0) {
       // Just keep rendering the no-lives screen
@@ -419,6 +447,8 @@ export class GameEngine {
       } else {
         this.renderer.renderStartScreen();
       }
+    } else if (this.gameState.is('username_modal')) {
+      this.renderer.renderUsernameModal(this.usernameInput, this.usernameError || undefined);
     } else if (this.gameState.is('gameover')) {
       this.renderer.renderGameOver(this.score, this.highScore, this.isNewHighScore);
     } else if (this.gameState.is('paused')) {
@@ -457,6 +487,57 @@ export class GameEngine {
     return this.livesState;
   }
 
+  // Username modal methods
+  showUsernameModal(callback: (username: string) => void): void {
+    this.usernameInput = '';
+    this.usernameError = '';
+    this.onUsernameSubmit = callback;
+    this.gameState.transition('username_modal');
+    this.render();
+  }
+
+  private validateUsername(username: string): { valid: boolean; error: string } {
+    if (username.length < 3) {
+      return { valid: false, error: 'Too short (min 3 chars)' };
+    }
+    if (username.length > 15) {
+      return { valid: false, error: 'Too long (max 15 chars)' };
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return { valid: false, error: 'Letters, numbers, _ only' };
+    }
+    return { valid: true, error: '' };
+  }
+
+  private handleUsernameKeydown(e: KeyboardEvent): void {
+    if (!this.gameState.is('username_modal')) return;
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const validation = this.validateUsername(this.usernameInput);
+      if (validation.valid) {
+        this.onUsernameSubmit?.(this.usernameInput);
+        this.gameState.transition('idle');
+        this.render();
+      } else {
+        this.usernameError = validation.error;
+        this.render();
+      }
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      this.usernameInput = this.usernameInput.slice(0, -1);
+      this.usernameError = '';
+      this.render();
+    } else if (e.key.length === 1 && /^[a-zA-Z0-9_]$/.test(e.key)) {
+      e.preventDefault();
+      if (this.usernameInput.length < 15) {
+        this.usernameInput += e.key;
+        this.usernameError = '';
+        this.render();
+      }
+    }
+  }
+
   getScore(): number {
     return Math.floor(this.score);
   }
@@ -478,6 +559,9 @@ export class GameEngine {
     this.inputManager.destroyTouch(this.canvas);
     this.canvas.removeEventListener('click', this.handleCanvasClick);
     this.canvas.removeEventListener('mousemove', this.handleCanvasMouseMove);
+    if (this.handleKeydownBound) {
+      window.removeEventListener('keydown', this.handleKeydownBound);
+    }
     this.audio.destroy();
   }
 
@@ -524,6 +608,21 @@ export class GameEngine {
   }
 
   private handleCanvasMouseMove(e: MouseEvent): void {
+    // Handle username modal hover
+    if (this.gameState.is('username_modal')) {
+      const { x, y } = this.getCanvasCoords(e);
+      const startBtn = this.renderer.getStartButtonBounds();
+      const canSubmit = this.usernameInput.length >= 3 && this.usernameInput.length <= 15;
+
+      if (canSubmit && this.isPointInRect(x, y, startBtn)) {
+        this.canvas.style.cursor = 'pointer';
+      } else {
+        this.canvas.style.cursor = 'default';
+      }
+      return;
+    }
+
+    // Handle death modal hover
     if (!this.gameState.is('death_modal')) {
       if (this.hoveredOption !== null) {
         this.hoveredOption = null;
@@ -554,6 +653,27 @@ export class GameEngine {
   }
 
   private handleCanvasClick(e: MouseEvent): void {
+    // Handle username modal click
+    if (this.gameState.is('username_modal')) {
+      const { x, y } = this.getCanvasCoords(e);
+      const startBtn = this.renderer.getStartButtonBounds();
+      const canSubmit = this.usernameInput.length >= 3 && this.usernameInput.length <= 15;
+
+      if (canSubmit && this.isPointInRect(x, y, startBtn)) {
+        const validation = this.validateUsername(this.usernameInput);
+        if (validation.valid) {
+          this.onUsernameSubmit?.(this.usernameInput);
+          this.gameState.transition('idle');
+          this.render();
+        } else {
+          this.usernameError = validation.error;
+          this.render();
+        }
+      }
+      return;
+    }
+
+    // Handle death modal click
     if (!this.gameState.is('death_modal')) return;
 
     const { x, y } = this.getCanvasCoords(e);
@@ -569,6 +689,20 @@ export class GameEngine {
     if (this.isPointInRect(x, y, bounds.restartBtn)) {
       this.deathModalSelection = 'restart';
       this.confirmDeathModalSelection();
+    }
+  }
+
+  private handleCanvasMouseMoveUsername(e: MouseEvent): void {
+    if (!this.gameState.is('username_modal')) return;
+
+    const { x, y } = this.getCanvasCoords(e);
+    const startBtn = this.renderer.getStartButtonBounds();
+    const canSubmit = this.usernameInput.length >= 3 && this.usernameInput.length <= 15;
+
+    if (canSubmit && this.isPointInRect(x, y, startBtn)) {
+      this.canvas.style.cursor = 'pointer';
+    } else {
+      this.canvas.style.cursor = 'default';
     }
   }
 }

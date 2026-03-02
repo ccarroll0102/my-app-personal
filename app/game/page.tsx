@@ -1,51 +1,42 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { GameCanvas } from '@/components/game/GameCanvas';
-import { createClient } from '@/lib/supabase/client';
-import { User } from '@supabase/supabase-js';
 import { LivesState } from '@/types/game';
-import { LeaderboardService } from '@/lib/game/services/LeaderboardService';
+import { getLeaderboardService, getUserIdentityService, UserIdentity } from '@/lib/game/services';
 import Link from 'next/link';
 
 export default function GamePage() {
+  const searchParams = useSearchParams();
+  const autoStart = searchParams.get('start') === 'true';
   const [currentScore, setCurrentScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
   const [gamesPlayed, setGamesPlayed] = useState(0);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserIdentity | null>(null);
   const [livesState, setLivesState] = useState<LivesState | null>(null);
-  const leaderboardServiceRef = useRef<LeaderboardService | null>(null);
 
-  // Load high score from localStorage and init leaderboard service on mount
+  // Initialize and check for existing user
   useEffect(() => {
+    const userService = getUserIdentityService();
+    const existingUser = userService.getUser();
+    if (existingUser) {
+      setUser(existingUser);
+    }
+
+    // Load high score from localStorage
     const savedHighScore = localStorage.getItem('wizardRunHighScore');
     if (savedHighScore) {
       setHighScore(parseInt(savedHighScore, 10));
     }
-    leaderboardServiceRef.current = new LeaderboardService();
   }, []);
 
-  // Get authenticated user
-  useEffect(() => {
-    const supabase = createClient();
-
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-    };
-
-    getUser();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  // Handle username submission from modal
+  const handleUsernameSubmit = (username: string) => {
+    const userService = getUserIdentityService();
+    const newUser = userService.createUser(username);
+    setUser(newUser);
+  };
 
   const handleLivesChange = (lives: LivesState) => {
     setLivesState(lives);
@@ -64,13 +55,13 @@ export default function GamePage() {
       localStorage.setItem('wizardRunHighScore', String(finalScore));
     }
 
-    // Save to leaderboard if user is logged in
-    if (user && leaderboardServiceRef.current) {
+    // Save to leaderboard if user exists
+    if (user) {
       try {
-        const displayName = user.email?.split('@')[0] || 'Anonymous';
-        await leaderboardServiceRef.current.updateHighScore(
-          user.id,
-          displayName,
+        const leaderboardService = getLeaderboardService();
+        await leaderboardService.updateHighScore(
+          user.userId,
+          user.username,
           finalScore
         );
       } catch (error) {
@@ -90,12 +81,19 @@ export default function GamePage() {
           &larr; Back
         </Link>
         <h1 className="pixel-font text-xl text-yellow-400">WIZARD RUN</h1>
-        <Link
-          href="/leaderboard"
-          className="text-cyan-300 hover:text-cyan-200 transition-colors pixel-font text-xs"
-        >
-          Leaderboard
-        </Link>
+        <div className="flex items-center gap-4">
+          {user && (
+            <span className="pixel-font text-xs text-cyan-300">
+              {user.username}
+            </span>
+          )}
+          <Link
+            href="/leaderboard"
+            className="text-cyan-300 hover:text-cyan-200 transition-colors pixel-font text-xs"
+          >
+            Leaderboard
+          </Link>
+        </div>
       </div>
 
       {/* Game Container */}
@@ -104,8 +102,10 @@ export default function GamePage() {
           onGameOver={handleGameOver}
           onScoreChange={handleScoreChange}
           initialHighScore={highScore}
-          userId={user?.id}
+          user={user}
+          onUsernameSubmit={handleUsernameSubmit}
           onLivesChange={handleLivesChange}
+          autoStart={autoStart}
         />
       </div>
 
@@ -127,7 +127,7 @@ export default function GamePage() {
           <div className="pixel-font text-xs text-gray-400">GAMES</div>
           <div className="pixel-font text-lg text-cyan-400">{gamesPlayed}</div>
         </div>
-        {user && livesState && (
+        {livesState && (
           <div>
             <div className="pixel-font text-xs text-gray-400">LIVES</div>
             <div className="pixel-font text-lg">

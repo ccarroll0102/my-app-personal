@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LeaderboardService, LeaderboardRankEntry } from '@/lib/game/services/LeaderboardService';
-import { createClient } from '@/lib/supabase/client';
+import { getLeaderboardService, getUserIdentityService, LeaderboardRankEntry } from '@/lib/game/services';
 import Link from 'next/link';
 
 export default function LeaderboardPage() {
@@ -11,17 +10,14 @@ export default function LeaderboardPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    const supabase = createClient();
-    const leaderboardService = new LeaderboardService();
-
     const fetchData = async () => {
-      // Get current user
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setCurrentUserId(user?.id ?? null);
+      // Get current user from local storage
+      const userService = getUserIdentityService();
+      const localUser = userService.getUser();
+      setCurrentUserId(localUser?.userId ?? null);
 
       // Fetch leaderboard
+      const leaderboardService = getLeaderboardService();
       const leaderboard = await leaderboardService.getLeaderboard(50);
       setEntries(leaderboard);
       setLoading(false);

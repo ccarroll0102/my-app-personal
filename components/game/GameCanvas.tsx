@@ -3,30 +3,35 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { GameEngine } from '@/lib/game/engine/GameEngine';
 import { GameConfig } from '@/lib/game/engine/GameConfig';
-import { LivesService } from '@/lib/game/services/LivesService';
+import { getLocalLivesService } from '@/lib/game/services';
 import { LivesState } from '@/types/game';
+import { UserIdentity } from '@/lib/game/services/UserIdentityService';
 
 interface GameCanvasProps {
   onGameOver?: (score: number) => void;
   onScoreChange?: (score: number) => void;
   initialHighScore?: number;
-  userId?: string;
+  user: UserIdentity | null;
+  onUsernameSubmit?: (username: string) => void;
   onLivesChange?: (lives: LivesState) => void;
+  autoStart?: boolean;
 }
 
 export function GameCanvas({
   onGameOver,
   onScoreChange,
   initialHighScore = 0,
-  userId,
+  user,
+  onUsernameSubmit,
   onLivesChange,
+  autoStart = false,
 }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const livesServiceRef = useRef<LivesService | null>(null);
   const [scale, setScale] = useState(1);
   const [livesState, setLivesState] = useState<LivesState | null>(null);
+  const hasShownUsernameModal = useRef(false);
 
   // Handle canvas click as fallback for starting game
   const handleCanvasClick = useCallback(() => {
@@ -55,46 +60,36 @@ export function GameCanvas({
   const onGameOverRef = useRef(onGameOver);
   const onScoreChangeRef = useRef(onScoreChange);
   const onLivesChangeRef = useRef(onLivesChange);
+  const onUsernameSubmitRef = useRef(onUsernameSubmit);
 
   useEffect(() => {
     onGameOverRef.current = onGameOver;
     onScoreChangeRef.current = onScoreChange;
     onLivesChangeRef.current = onLivesChange;
-  }, [onGameOver, onScoreChange, onLivesChange]);
+    onUsernameSubmitRef.current = onUsernameSubmit;
+  }, [onGameOver, onScoreChange, onLivesChange, onUsernameSubmit]);
 
-  // Handle using a life
-  const handleLifeUsed = useCallback(async () => {
-    if (!userId || !livesServiceRef.current) return;
-
+  // Handle using a life (now local)
+  const handleLifeUsed = useCallback(() => {
     try {
-      const newLives = await livesServiceRef.current.useLife(userId);
+      const livesService = getLocalLivesService();
+      const newLives = livesService.useLife();
       setLivesState(newLives);
       engineRef.current?.setLivesState(newLives);
       onLivesChangeRef.current?.(newLives);
     } catch (error) {
       console.error('Failed to use life:', error);
     }
-  }, [userId]);
+  }, []);
 
-  // Fetch lives on mount if userId is provided
+  // Initialize local lives service
   useEffect(() => {
-    if (!userId) return;
-
-    livesServiceRef.current = new LivesService();
-
-    const fetchLives = async () => {
-      try {
-        const lives = await livesServiceRef.current!.getUserLives(userId);
-        setLivesState(lives);
-        engineRef.current?.setLivesState(lives);
-        onLivesChangeRef.current?.(lives);
-      } catch (error) {
-        console.error('Failed to fetch lives:', error);
-      }
-    };
-
-    fetchLives();
-  }, [userId]);
+    const livesService = getLocalLivesService();
+    const lives = livesService.getLives();
+    setLivesState(lives);
+    engineRef.current?.setLivesState(lives);
+    onLivesChangeRef.current?.(lives);
+  }, []);
 
   // Update countdown timer every second when no lives
   useEffect(() => {
@@ -106,12 +101,13 @@ export function GameCanvas({
         const newSecondsUntilReset = Math.max(0, prev.secondsUntilReset - 1);
 
         // If timer reached 0, refetch lives
-        if (newSecondsUntilReset === 0 && userId && livesServiceRef.current) {
-          livesServiceRef.current.getUserLives(userId).then((newLives) => {
-            setLivesState(newLives);
-            engineRef.current?.setLivesState(newLives);
-            onLivesChangeRef.current?.(newLives);
-          });
+        if (newSecondsUntilReset === 0) {
+          const livesService = getLocalLivesService();
+          const newLives = livesService.getLives();
+          setLivesState(newLives);
+          engineRef.current?.setLivesState(newLives);
+          onLivesChangeRef.current?.(newLives);
+          return newLives;
         }
 
         const updated = { ...prev, secondsUntilReset: newSecondsUntilReset };
@@ -121,7 +117,7 @@ export function GameCanvas({
     }, 1000);
 
     return () => clearInterval(intervalId);
-  }, [livesState?.count, userId]);
+  }, [livesState?.count]);
 
   // Initialize game engine (only once)
   useEffect(() => {
@@ -139,7 +135,7 @@ export function GameCanvas({
       },
     });
 
-    engine.init();
+    engine.init({ autoStart });
 
     if (initialHighScore > 0) {
       engine.setHighScore(initialHighScore);
@@ -152,6 +148,16 @@ export function GameCanvas({
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
+
+  // Show username modal if no user (after engine is initialized)
+  useEffect(() => {
+    if (!user && engineRef.current && !hasShownUsernameModal.current) {
+      hasShownUsernameModal.current = true;
+      engineRef.current.showUsernameModal((username) => {
+        onUsernameSubmitRef.current?.(username);
+      });
+    }
+  }, [user]);
 
   // Update engine with lives state when it changes
   useEffect(() => {

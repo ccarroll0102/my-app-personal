@@ -534,7 +534,7 @@ export default function Home() {
           * WELCOME TO THE MYSTICAL LAND *
         </p>
         <Link
-          href="/game"
+          href="/game?start=true"
           className="inline-block mt-8 px-6 py-3 pixel-font text-sm md:text-base transition-all hover:scale-105"
           style={{
             backgroundColor: '#8B00FF',
