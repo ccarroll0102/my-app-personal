@@ -389,7 +389,10 @@ export class GameEngine {
       this.animationFrameId = null;
     }
 
-    // If lives system is active, show death modal instead of game over
+    // Always call onGameOver to save score to leaderboard
+    this.callbacks.onGameOver?.(Math.floor(this.score));
+
+    // If lives system is active, show death modal instead of game over screen
     if (this.livesState !== null) {
       this.deathModalSelection = this.livesState.count > 0 ? 'continue' : 'restart';
       this.gameState.transition('death_modal');
@@ -398,7 +401,6 @@ export class GameEngine {
     } else {
       // Standard game over flow
       this.gameState.transition('gameover');
-      this.callbacks.onGameOver?.(Math.floor(this.score));
       this.render();
       this.startIdleLoop();
     }
