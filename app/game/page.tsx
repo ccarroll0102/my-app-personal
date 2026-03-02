@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { GameCanvas } from '@/components/game/GameCanvas';
 import { LivesState } from '@/types/game';
 import { getLeaderboardService, getUserIdentityService, UserIdentity } from '@/lib/game/services';
 import Link from 'next/link';
 
-export default function GamePage() {
+function GamePageContent() {
   const searchParams = useSearchParams();
   const autoStart = searchParams.get('start') === 'true';
   const [currentScore, setCurrentScore] = useState(0);
@@ -152,5 +152,13 @@ export default function GamePage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function GamePage() {
+  return (
+    <Suspense fallback={<div className="w-full max-w-4xl mx-auto flex items-center justify-center p-4 min-h-[400px]"><span className="pixel-font text-yellow-400">Loading...</span></div>}>
+      <GamePageContent />
+    </Suspense>
   );
 }
