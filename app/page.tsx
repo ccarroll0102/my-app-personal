@@ -324,7 +324,7 @@ export default function Home() {
       </div>
 
       {/* Sparkly Pixel Unicorn - N64 Style */}
-      <div className="absolute bottom-16 left-1/2 -translate-x-1/2 animate-float">
+      <div className="absolute bottom-16 left-1/2 -translate-x-[55%] animate-float">
         {/* Pixel Sparkles */}
         {[...Array(10)].map((_, i) => (
           <div
