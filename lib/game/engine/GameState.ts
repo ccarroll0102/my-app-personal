@@ -45,13 +45,14 @@ export class GameState {
 
   private canTransitionTo(newState: GameStateType): boolean {
     const validTransitions: Record<GameStateType, GameStateType[]> = {
-      idle: ['playing', 'username_modal'],
+      idle: ['playing', 'username_modal', 'character_select'],
       playing: ['paused', 'gameover', 'death_modal'],
       paused: ['playing', 'idle'],
-      gameover: ['idle', 'playing'],
-      death_modal: ['countdown', 'idle'],
+      gameover: ['idle', 'playing', 'character_select'],
+      death_modal: ['countdown', 'idle', 'character_select'],
       countdown: ['playing'],
-      username_modal: ['idle'],
+      username_modal: ['idle', 'character_select'],
+      character_select: ['playing', 'idle'],
     };
 
     return validTransitions[this._state]?.includes(newState) ?? false;

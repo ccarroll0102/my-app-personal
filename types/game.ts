@@ -12,9 +12,11 @@ export interface Rectangle {
   height: number;
 }
 
-export type GameStateType = 'idle' | 'playing' | 'paused' | 'gameover' | 'death_modal' | 'countdown' | 'username_modal';
+export type GameStateType = 'idle' | 'playing' | 'paused' | 'gameover' | 'death_modal' | 'countdown' | 'username_modal' | 'character_select';
 
 export type PlayerState = 'running' | 'jumping' | 'ducking' | 'dead';
+
+export type CharacterType = 'wizard' | 'witch' | 'unicorn' | 'dragon';
 
 export type ObstacleType = 'ground' | 'air' | 'tall';
 

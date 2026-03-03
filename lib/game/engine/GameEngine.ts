@@ -9,7 +9,9 @@ import { AudioSystem } from '../systems/AudioSystem';
 import { Player } from '../entities/Player';
 import { ObstacleGenerator } from '../generators/ObstacleGenerator';
 import { DifficultyManager } from '../generators/DifficultyManager';
-import { GameCallbacks, LivesState, DeathModalChoice } from '@/types/game';
+import { GameCallbacks, LivesState, DeathModalChoice, CharacterType } from '@/types/game';
+
+const CHARACTER_TYPES: CharacterType[] = ['wizard', 'witch', 'unicorn', 'dragon'];
 
 export class GameEngine {
   private canvas: HTMLCanvasElement;
@@ -45,6 +47,10 @@ export class GameEngine {
   private onUsernameSubmit?: (username: string) => void;
   private handleKeydownBound: ((e: KeyboardEvent) => void) | null = null;
   private pendingAutoStart: boolean = false;
+
+  // Character selection
+  private selectedCharacterIndex: number = 0;
+  private hoveredCharacterIndex: number = -1;
 
   constructor(canvas: HTMLCanvasElement, callbacks?: GameCallbacks) {
     this.canvas = canvas;
@@ -124,6 +130,15 @@ export class GameEngine {
       return;
     }
 
+    // Handle character selection
+    if (this.gameState.is('character_select')) {
+      this.processCharacterSelectInput();
+      this.render();
+      this.inputManager.clearJustPressed();
+      this.idleLoopId = requestAnimationFrame(this.idleLoop);
+      return;
+    }
+
     // Block starting if no lives remaining
     if (this.gameState.is('idle') && this.livesState !== null && this.livesState.count === 0) {
       // Just keep rendering the no-lives screen
@@ -144,8 +159,7 @@ export class GameEngine {
     // Check for input to start/restart game
     if (this.gameState.is('idle') || this.gameState.is('gameover')) {
       if (this.inputManager.isJumpJustPressed()) {
-        this.stopIdleLoop();
-        this.start();
+        this.showCharacterSelect();
         return;
       }
     }
@@ -456,6 +470,8 @@ export class GameEngine {
       );
     } else if (this.gameState.is('countdown')) {
       this.renderer.renderCountdown(this.countdownValue);
+    } else if (this.gameState.is('character_select')) {
+      this.renderer.renderCharacterSelect(this.selectedCharacterIndex, this.hoveredCharacterIndex);
     }
   }
 
@@ -496,8 +512,50 @@ export class GameEngine {
   triggerPendingAutoStart(): void {
     if (this.pendingAutoStart && this.gameState.is('idle')) {
       this.pendingAutoStart = false;
-      this.start();
+      this.showCharacterSelect();
     }
+  }
+
+  // Character selection methods
+  showCharacterSelect(): void {
+    this.selectedCharacterIndex = 0;
+    this.hoveredCharacterIndex = -1;
+    this.gameState.transition('character_select');
+    this.render();
+  }
+
+  private processCharacterSelectInput(): void {
+    // Left/Right to navigate
+    if (this.inputManager.isKeyJustPressed('ArrowLeft')) {
+      this.selectedCharacterIndex = (this.selectedCharacterIndex - 1 + CHARACTER_TYPES.length) % CHARACTER_TYPES.length;
+    } else if (this.inputManager.isKeyJustPressed('ArrowRight')) {
+      this.selectedCharacterIndex = (this.selectedCharacterIndex + 1) % CHARACTER_TYPES.length;
+    }
+
+    // Enter/Space to confirm
+    if (this.inputManager.isJumpJustPressed()) {
+      this.confirmCharacterSelection();
+    }
+  }
+
+  private confirmCharacterSelection(): void {
+    const selectedCharacter = CHARACTER_TYPES[this.selectedCharacterIndex];
+    this.player.setCharacter(selectedCharacter);
+    this.stopIdleLoop();
+    this.reset();
+    this.gameState.transition('playing');
+    this.audio.playStart();
+    this.callbacks.onGameStart?.();
+    this.lastTimestamp = performance.now();
+    this.animationFrameId = requestAnimationFrame(this.gameLoop);
+  }
+
+  getSelectedCharacterIndex(): number {
+    return this.selectedCharacterIndex;
+  }
+
+  getHoveredCharacterIndex(): number {
+    return this.hoveredCharacterIndex;
   }
 
   private validateUsername(username: string): { valid: boolean; error: string } {
@@ -521,13 +579,8 @@ export class GameEngine {
       const validation = this.validateUsername(this.usernameInput);
       if (validation.valid) {
         this.onUsernameSubmit?.(this.usernameInput);
-        this.gameState.transition('idle');
-        this.render();
-        // Auto-start game if it was pending
-        if (this.pendingAutoStart) {
-          this.pendingAutoStart = false;
-          requestAnimationFrame(() => this.start());
-        }
+        // Go to character select after username
+        this.showCharacterSelect();
       } else {
         this.usernameError = validation.error;
         this.render();
@@ -631,6 +684,30 @@ export class GameEngine {
       return;
     }
 
+    // Handle character selection hover
+    if (this.gameState.is('character_select')) {
+      const { x, y } = this.getCanvasCoords(e);
+      const charBounds = this.renderer.getCharacterSelectBounds();
+
+      let newHovered = -1;
+      for (let i = 0; i < charBounds.characters.length; i++) {
+        if (this.isPointInRect(x, y, charBounds.characters[i])) {
+          newHovered = i;
+          break;
+        }
+      }
+
+      const overButton = this.isPointInRect(x, y, charBounds.selectButton);
+
+      if (newHovered !== this.hoveredCharacterIndex) {
+        this.hoveredCharacterIndex = newHovered;
+        this.render();
+      }
+
+      this.canvas.style.cursor = (newHovered >= 0 || overButton) ? 'pointer' : 'default';
+      return;
+    }
+
     // Handle death modal hover
     if (!this.gameState.is('death_modal')) {
       if (this.hoveredOption !== null) {
@@ -672,17 +749,32 @@ export class GameEngine {
         const validation = this.validateUsername(this.usernameInput);
         if (validation.valid) {
           this.onUsernameSubmit?.(this.usernameInput);
-          this.gameState.transition('idle');
-          this.render();
-          // Auto-start game if it was pending
-          if (this.pendingAutoStart) {
-            this.pendingAutoStart = false;
-            requestAnimationFrame(() => this.start());
-          }
+          this.showCharacterSelect();
         } else {
           this.usernameError = validation.error;
           this.render();
         }
+      }
+      return;
+    }
+
+    // Handle character selection click
+    if (this.gameState.is('character_select')) {
+      const { x, y } = this.getCanvasCoords(e);
+      const charBounds = this.renderer.getCharacterSelectBounds();
+
+      // Check if clicked on a character
+      for (let i = 0; i < charBounds.characters.length; i++) {
+        if (this.isPointInRect(x, y, charBounds.characters[i])) {
+          this.selectedCharacterIndex = i;
+          this.confirmCharacterSelection();
+          return;
+        }
+      }
+
+      // Check if clicked on select button
+      if (this.isPointInRect(x, y, charBounds.selectButton)) {
+        this.confirmCharacterSelection();
       }
       return;
     }

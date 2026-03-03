@@ -5,7 +5,15 @@ import { Player } from '../entities/Player';
 import { Obstacle } from '../entities/Obstacle';
 import { ParallaxSystem } from './ParallaxSystem';
 import { TimeOfDay } from '../generators/DifficultyManager';
-import { DeathModalChoice } from '@/types/game';
+import { DeathModalChoice, CharacterType } from '@/types/game';
+
+const CHARACTER_TYPES: CharacterType[] = ['wizard', 'witch', 'unicorn', 'dragon'];
+const CHARACTER_NAMES: Record<CharacterType, string> = {
+  wizard: 'WIZARD',
+  witch: 'WITCH',
+  unicorn: 'UNICORN',
+  dragon: 'DRAGON',
+};
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -517,6 +525,336 @@ export class Renderer {
       y: buttonY - buttonHeight / 2,
       width: buttonWidth,
       height: buttonHeight,
+    };
+  }
+
+  renderCharacterSelect(selectedIndex: number, hoveredIndex: number): void {
+    this.ctx.save();
+
+    // Dark overlay
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    this.ctx.fillRect(0, 0, this.width, this.height);
+
+    const centerX = this.width / 2;
+
+    // Title
+    this.ctx.fillStyle = '#ffd700';
+    this.ctx.font = '14px "Press Start 2P", monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('CHOOSE YOUR CHARACTER', centerX, 30);
+
+    // Character cards
+    const cardWidth = 70;
+    const cardHeight = 80;
+    const cardSpacing = 10;
+    const totalWidth = (cardWidth * 4) + (cardSpacing * 3);
+    const startX = centerX - totalWidth / 2;
+    const cardY = 50;
+
+    for (let i = 0; i < CHARACTER_TYPES.length; i++) {
+      const charType = CHARACTER_TYPES[i];
+      const cardX = startX + i * (cardWidth + cardSpacing);
+      const isSelected = i === selectedIndex;
+      const isHovered = i === hoveredIndex;
+
+      // Card background
+      if (isSelected) {
+        this.ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+        this.ctx.fillRect(cardX, cardY, cardWidth, cardHeight);
+        this.ctx.strokeStyle = '#ffd700';
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeRect(cardX, cardY, cardWidth, cardHeight);
+      } else if (isHovered) {
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        this.ctx.fillRect(cardX, cardY, cardWidth, cardHeight);
+        this.ctx.strokeStyle = '#888888';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(cardX, cardY, cardWidth, cardHeight);
+      } else {
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+        this.ctx.fillRect(cardX, cardY, cardWidth, cardHeight);
+        this.ctx.strokeStyle = '#444444';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(cardX, cardY, cardWidth, cardHeight);
+      }
+
+      // Render character preview
+      const previewX = cardX + (cardWidth - 32) / 2;
+      const previewY = cardY + 10;
+      this.renderCharacterPreview(charType, previewX, previewY);
+
+      // Character name
+      this.ctx.fillStyle = isSelected ? '#ffd700' : '#ffffff';
+      this.ctx.font = '6px "Press Start 2P", monospace';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(CHARACTER_NAMES[charType], cardX + cardWidth / 2, cardY + cardHeight - 8);
+    }
+
+    // Select button
+    const buttonY = 145;
+    const buttonWidth = 100;
+    const buttonHeight = 24;
+
+    this.ctx.fillStyle = 'rgba(255, 215, 0, 0.2)';
+    this.ctx.fillRect(centerX - buttonWidth / 2, buttonY - buttonHeight / 2, buttonWidth, buttonHeight);
+    this.ctx.strokeStyle = '#ffd700';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(centerX - buttonWidth / 2, buttonY - buttonHeight / 2, buttonWidth, buttonHeight);
+
+    this.ctx.fillStyle = '#ffd700';
+    this.ctx.font = '10px "Press Start 2P", monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('SELECT', centerX, buttonY + 4);
+
+    // Instructions
+    this.ctx.fillStyle = '#666666';
+    this.ctx.font = '6px "Press Start 2P", monospace';
+    this.ctx.fillText('LEFT/RIGHT: Choose | SPACE: Select', centerX, 178);
+
+    this.ctx.restore();
+  }
+
+  private renderCharacterPreview(charType: CharacterType, x: number, y: number): void {
+    this.ctx.save();
+
+    switch (charType) {
+      case 'wizard':
+        this.renderWizardPreview(x, y);
+        break;
+      case 'witch':
+        this.renderWitchPreview(x, y);
+        break;
+      case 'unicorn':
+        this.renderUnicornPreview(x, y);
+        break;
+      case 'dragon':
+        this.renderDragonPreview(x, y);
+        break;
+    }
+
+    this.ctx.restore();
+  }
+
+  private renderWizardPreview(x: number, y: number): void {
+    // Robe body
+    this.ctx.fillStyle = '#4a00b4';
+    this.ctx.fillRect(x + 8, y + 20, 16, 28);
+    this.ctx.fillRect(x + 4, y + 40, 24, 8);
+
+    // Head
+    this.ctx.fillStyle = '#ffe4c4';
+    this.ctx.fillRect(x + 10, y + 8, 12, 12);
+
+    // Hat
+    this.ctx.fillStyle = '#4a00b4';
+    this.ctx.fillRect(x + 8, y + 2, 16, 8);
+    this.ctx.fillRect(x + 12, y - 6, 8, 8);
+    this.ctx.fillRect(x + 14, y - 10, 4, 4);
+
+    // Star
+    this.ctx.fillStyle = '#ffd700';
+    this.ctx.fillRect(x + 15, y - 8, 2, 2);
+
+    // Brim
+    this.ctx.fillStyle = '#3a0094';
+    this.ctx.fillRect(x + 6, y + 8, 20, 2);
+
+    // Eyes
+    this.ctx.fillStyle = '#000000';
+    this.ctx.fillRect(x + 12, y + 12, 2, 2);
+    this.ctx.fillRect(x + 18, y + 12, 2, 2);
+
+    // Beard
+    this.ctx.fillStyle = '#c0c0c0';
+    this.ctx.fillRect(x + 12, y + 18, 8, 4);
+    this.ctx.fillRect(x + 14, y + 22, 4, 4);
+
+    // Staff
+    this.ctx.fillStyle = '#8b4513';
+    this.ctx.fillRect(x + 26, y + 10, 4, 36);
+
+    // Orb
+    this.ctx.fillStyle = '#00ffff';
+    this.ctx.fillRect(x + 25, y + 4, 6, 6);
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fillRect(x + 27, y + 5, 2, 2);
+  }
+
+  private renderWitchPreview(x: number, y: number): void {
+    // Robe
+    this.ctx.fillStyle = '#1a472a';
+    this.ctx.fillRect(x + 8, y + 20, 16, 28);
+    this.ctx.fillRect(x + 4, y + 40, 24, 8);
+
+    // Head
+    this.ctx.fillStyle = '#7cba5f';
+    this.ctx.fillRect(x + 10, y + 8, 12, 12);
+
+    // Hat
+    this.ctx.fillStyle = '#1a1a2e';
+    this.ctx.fillRect(x + 6, y + 2, 20, 8);
+    this.ctx.fillRect(x + 10, y - 6, 12, 8);
+    this.ctx.fillRect(x + 13, y - 14, 6, 8);
+
+    // Buckle
+    this.ctx.fillStyle = '#ffd700';
+    this.ctx.fillRect(x + 10, y + 4, 12, 2);
+
+    // Eyes
+    this.ctx.fillStyle = '#ff0000';
+    this.ctx.fillRect(x + 12, y + 12, 2, 2);
+    this.ctx.fillRect(x + 18, y + 12, 2, 2);
+
+    // Wart
+    this.ctx.fillStyle = '#2d5a27';
+    this.ctx.fillRect(x + 20, y + 16, 2, 2);
+
+    // Broomstick
+    this.ctx.fillStyle = '#8b4513';
+    this.ctx.fillRect(x + 26, y + 10, 4, 36);
+
+    // Bristles
+    this.ctx.fillStyle = '#daa520';
+    this.ctx.fillRect(x + 24, y + 42, 8, 6);
+  }
+
+  private renderUnicornPreview(x: number, y: number): void {
+    // Body
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fillRect(x + 4, y + 20, 24, 16);
+    this.ctx.fillRect(x + 6, y + 36, 20, 8);
+    this.ctx.fillRect(x + 20, y + 12, 8, 10);
+    this.ctx.fillRect(x + 22, y + 4, 10, 10);
+
+    // Snout
+    this.ctx.fillStyle = '#ffe4e1';
+    this.ctx.fillRect(x + 28, y + 8, 4, 6);
+
+    // Horn
+    this.ctx.fillStyle = '#ffd700';
+    this.ctx.fillRect(x + 26, y - 2, 2, 6);
+    this.ctx.fillStyle = '#ffec8b';
+    this.ctx.fillRect(x + 27, y - 4, 2, 2);
+
+    // Eye
+    this.ctx.fillStyle = '#000000';
+    this.ctx.fillRect(x + 24, y + 6, 2, 2);
+
+    // Rainbow mane
+    this.ctx.fillStyle = '#ff0000';
+    this.ctx.fillRect(x + 18, y + 4, 4, 2);
+    this.ctx.fillStyle = '#ff7f00';
+    this.ctx.fillRect(x + 16, y + 6, 4, 2);
+    this.ctx.fillStyle = '#ffff00';
+    this.ctx.fillRect(x + 14, y + 8, 4, 2);
+    this.ctx.fillStyle = '#00ff00';
+    this.ctx.fillRect(x + 12, y + 10, 4, 2);
+    this.ctx.fillStyle = '#0080ff';
+    this.ctx.fillRect(x + 10, y + 12, 4, 2);
+    this.ctx.fillStyle = '#8b00ff';
+    this.ctx.fillRect(x + 8, y + 14, 4, 2);
+
+    // Legs
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fillRect(x + 8, y + 40, 4, 8);
+    this.ctx.fillRect(x + 16, y + 40, 4, 8);
+    this.ctx.fillRect(x + 20, y + 40, 4, 8);
+
+    // Hooves
+    this.ctx.fillStyle = '#333333';
+    this.ctx.fillRect(x + 8, y + 46, 4, 2);
+    this.ctx.fillRect(x + 16, y + 46, 4, 2);
+    this.ctx.fillRect(x + 20, y + 46, 4, 2);
+  }
+
+  private renderDragonPreview(x: number, y: number): void {
+    // Body
+    this.ctx.fillStyle = '#1e90ff';
+    this.ctx.fillRect(x + 8, y + 20, 20, 18);
+
+    // Belly
+    this.ctx.fillStyle = '#87ceeb';
+    this.ctx.fillRect(x + 10, y + 24, 12, 12);
+
+    // Neck
+    this.ctx.fillStyle = '#1e90ff';
+    this.ctx.fillRect(x + 22, y + 12, 8, 10);
+
+    // Head
+    this.ctx.fillRect(x + 24, y + 4, 12, 10);
+    this.ctx.fillRect(x + 32, y + 6, 6, 6);
+
+    // Fire
+    this.ctx.fillStyle = '#ff4500';
+    this.ctx.fillRect(x + 36, y + 8, 2, 2);
+
+    // Eye
+    this.ctx.fillStyle = '#ffff00';
+    this.ctx.fillRect(x + 28, y + 6, 3, 3);
+    this.ctx.fillStyle = '#000000';
+    this.ctx.fillRect(x + 29, y + 7, 2, 2);
+
+    // Horns
+    this.ctx.fillStyle = '#4169e1';
+    this.ctx.fillRect(x + 26, y, 2, 4);
+    this.ctx.fillRect(x + 32, y, 2, 4);
+
+    // Spikes
+    this.ctx.fillRect(x + 12, y + 16, 4, 4);
+    this.ctx.fillRect(x + 18, y + 14, 4, 6);
+
+    // Wings
+    this.ctx.fillStyle = '#4682b4';
+    this.ctx.fillRect(x + 4, y + 10, 6, 12);
+    this.ctx.fillRect(x, y + 6, 4, 8);
+    this.ctx.fillStyle = '#87ceeb';
+    this.ctx.fillRect(x + 5, y + 12, 4, 8);
+
+    // Legs
+    this.ctx.fillStyle = '#1e90ff';
+    this.ctx.fillRect(x + 12, y + 36, 5, 10);
+    this.ctx.fillRect(x + 22, y + 36, 5, 10);
+
+    // Claws
+    this.ctx.fillStyle = '#333333';
+    this.ctx.fillRect(x + 12, y + 44, 6, 4);
+    this.ctx.fillRect(x + 22, y + 44, 6, 4);
+  }
+
+  getCharacterSelectBounds(): {
+    characters: { x: number; y: number; width: number; height: number }[];
+    selectButton: { x: number; y: number; width: number; height: number };
+  } {
+    const centerX = this.width / 2;
+    const cardWidth = 70;
+    const cardHeight = 80;
+    const cardSpacing = 10;
+    const totalWidth = (cardWidth * 4) + (cardSpacing * 3);
+    const startX = centerX - totalWidth / 2;
+    const cardY = 50;
+
+    const characters: { x: number; y: number; width: number; height: number }[] = [];
+    for (let i = 0; i < 4; i++) {
+      characters.push({
+        x: startX + i * (cardWidth + cardSpacing),
+        y: cardY,
+        width: cardWidth,
+        height: cardHeight,
+      });
+    }
+
+    const buttonY = 145;
+    const buttonWidth = 100;
+    const buttonHeight = 24;
+
+    return {
+      characters,
+      selectButton: {
+        x: centerX - buttonWidth / 2,
+        y: buttonY - buttonHeight / 2,
+        width: buttonWidth,
+        height: buttonHeight,
+      },
     };
   }
 }
